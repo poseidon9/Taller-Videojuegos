@@ -1,6 +1,7 @@
 import sys, pygame
 
 WHITE = [255, 255, 255]
+GRAVITY = 1
 
 class GameEntity(object):
 	x = 0
@@ -110,12 +111,17 @@ class SpriteStripAnim(GameEntity):
         return self
 
 
+class Platform(GameEntity):
+	def __init__(self, x, y):
+		super(Platform, self).__init__(x, y, "plataforma.png")
 
 class Player(GameEntity):
 	NORTE = 1; ESTE = 2; SUR = 3; OESTE = 4
 	game_map = None
 	strips = None
 	speed = 5
+	JUMP_FORCE = 10
+	on_ground = False
 	change_x = 0
 	change_y = 0
 	looking_right = True
@@ -135,31 +141,41 @@ class Player(GameEntity):
 
 	def action(self, key):
 		if key[pygame.K_w]:
-			self.mover(self.NORTE)
+			self.jump()
+		#	self.mover(self.NORTE)
 		if key[pygame.K_d]:
 			self.mover(self.ESTE)
-		if key[pygame.K_s]:
-			self.mover(self.SUR)
+		#if key[pygame.K_s]:
+		#	self.mover(self.SUR)
 		if key[pygame.K_a]:
 			self.mover(self.OESTE)
 
+	def jump(self):
+		if self.on_ground:
+			self.change_y = -self.JUMP_FORCE
+			self.on_ground = False
+
 
 	def mover(self, DIRECTION):
-		if DIRECTION == self.NORTE:
-			if self.rect.y > 0:
-				self.change_y = -self.speed
 		if DIRECTION == self.ESTE:
 			if self.rect.x < 640:
 				self.change_x = self.speed
-		if DIRECTION == self.SUR:
-			if self.rect.y < 480:
-				self.change_y = self.speed
+				self.current_animation = "RUN"
+				self.looking_right = True
 		if DIRECTION == self.OESTE:
 			if self.rect.x > 0:
 				self.change_x = -self.speed
-		self.collideKey()
-		self.collideDoor()
-
+				self.current_animation = "RUN"
+				self.looking_right = False
+		#if DIRECTION == self.SUR:
+		#	if self.rect.y < 480:
+		#		self.change_y = self.speed
+		#		self.current_animation = "RUN"
+		#if DIRECTION == self.NORTE:
+		#	if self.rect.y > 0:
+		#		self.change_y = -self.speed
+		#		self.current_animation = "RUN"
+		
 	def collideKey(self):
 		if not self.game_map.key.on_player:
 			if self.rect.colliderect(self.game_map.key.rect):
@@ -170,22 +186,62 @@ class Player(GameEntity):
 			if self.rect.colliderect(self.game_map.door.rect):
 				self.game_map.door.is_open = True
 
+	def collidePlatform(self, platform):
+		if self.change_x != 0:
+			temp_x = self.rect.x
+			self.rect.x += self.change_x
+			hit = self.rect.colliderect(platform.rect)
+			if hit:
+				if self.change_x < 0:
+					self.x = platform.rect.right + 1
+				elif self.change_x > 0:
+					self.x = platform.rect.left - self. rect.width - 1
+				self.change_x = 0
+				self.current_animation = "IDLE"
+			self.rect.x = temp_x
+		if self.change_y != 0:
+			temp_y = self.rect.y
+			self.rect.y += self.change_y
+			hit = self.rect.colliderect(platform.rect)
+			if hit:
+				if self.change_y < 0:
+					self.y = platform.rect.bottom + 1
+				elif self.change_y > 0:
+					self.y = platform.rect.top - self. rect.height - 1
+					self.on_ground = True
+				self.change_y = 0
+				self.current_animation = "IDLE"
+			self.rect.y = temp_y
+
 	def  update(self):
+		for platform in self.game_map.platforms:
+			self.collidePlatform(platform)
 		self.x += self.change_x
 		self.y += self.change_y
 		super(Player, self).update()
-		super(Player, self).setSpriteFromLoadedImage(self.strips[self.current_animation].next())
+		if self.looking_right:
+			super(Player, self).setSpriteFromLoadedImage(self.strips[self.current_animation].next())
+		else:
+			super(Player, self).setSpriteFromLoadedImage(pygame.transform.flip(self.strips[self.current_animation].next(), True, False))
+
 		self.change_x = 0
-		self.change_y = 0
+		if self.change_y < 10:
+			self.change_y += GRAVITY
+		else:
+			self.change_y = 10
+		self.collideKey()
+		self.collideDoor()
 
 class Map:
 	door = None
 	key = None
+	platforms = None
 	player = None
 
-	def getElements(self, door, key, player):
+	def getElements(self, door, key, platforms, player):
 		self.door = door
 		self.key = key
+		self.platforms = platforms
 		self.player = player
 
 class Key(GameEntity):
@@ -214,11 +270,12 @@ def main():
 	dt = clock.tick(MAX_FPS)
 	
 	game_map = Map()
-	player = Player(game_map, 320, 240)
+	player = Player(game_map, 100, 60)
 	key = Key(0,0)
 	door = Door(300, 300)
+	platforms = [Platform(100, 100)]
 
-	game_map.getElements(door, key, player)
+	game_map.getElements(door, key, platforms, player)
 
 	while True:
 		for event in pygame.event.get():
@@ -232,6 +289,8 @@ def main():
 
 		screen.fill(white)
 		screen.blit(door.sprite, door.rect)
+		for platform in platforms:
+			screen.blit(platform.sprite, platform.rect)
 		if not key.on_player:
 			screen.blit(key.sprite, key.rect)
 		screen.blit(player.sprite, player.rect)
