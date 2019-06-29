@@ -56,7 +56,7 @@ def printGato(gato):
 
 
 def main():
-	print("Fase1")
+	print("Fase2")
 	print("https://github.com/poseidon9/Taller-Videojuegos")
 
 	gato = [[0,0,0],[0,0,0],[0,0,0]]
